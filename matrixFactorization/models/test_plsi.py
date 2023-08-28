@@ -23,24 +23,77 @@ class pLSI_dense:
         self.nVocabulary = dw_matrix.shape[1]
     
     def compute_observed(self):
+        # self.pZDW : [n_topics, n_docs, n_vocs]
+        # self..dw_matrix : [n_docs, n_vocs]
+        observed = np.zeros((self.nDocuments, self.nVocabulary, self.nTopics))
+        for doc_id in range(self.nDocuments):
+            # self.pZDW[:, doc_id, :] : [n_topics, n_vocs]
+            # self.dw_matrix[doc_id, :] : [n_vocs]
+            # self.dw_matrix[doc_id, :].reshape(1, -1) : [1, n_vocs]
+            # use broadcast.[n_topics, n_vocs] x [1, n_vocs] => [n_topics, n_vocs] x [n_topics, n_vocs]
+            # ([n_topics, n_vocs] x [n_topic.n_vocs] => [n_topics, n_vocs]
+            # [n_topics, n_vocs].T => [n_vocs, n_topics]
+            observed[doc_id] = (self.pZDW[:, doc_id, :] * self.dw_matrix[doc_id, :].reshape(1, -1)).T
         return observed
 
     def update_pZD(self, observed):
-        pass             
+        # pZD: [n_topics, n_docs]
+        # observed : [n_docs, n_vocs, n_topics]
+        self.pZD[:,:] = observed.sum(axis=1).T  # [n_topics, n_docs]
+        self.pZD /= self.dw_matrix.sum(axis=1).reshape(1, self.nDocuments)
 
     def update_pWZ(self, observed):
-        pass
+        # pWZ: [n_vocs, n_topics]
+        # observed : [n_docs, n_vocs, n_topics]
+        self.pWZ = observed.sum(axis=0)
+
+        # topic-wise normalization
+        for topic_id in range(self.nTopics):
+            self.pWZ[:, topic_id] /= self.pWZ[:, topic_id].sum()  # since 1-d, we don't need to specify axis
  
+        # # parallel normalization 
+        # # self.pWZ  # [n_vocs, n_topics]
+        # # self.pWZ.sum(axis=0).reshape(1, -1)  # [1, n_topics]
+        # self.pWZ /= self.pWZ.sum(axis=0).reshape(1, -1)
+
     def update_pZDW(self):
-        pass
+        # update pZDW : [n_topics, n_docs, n_vocs]
+        # pWZ: [n_vocs, n_topics]
+        # pZD: [n_topics, n_docs]
+
+        for topic_id in range(self.nTopics):
+            self.pZDW[topic_id, :, :] = self.pWZ[:, topic_id].reshape(1, -1) * self.pZD[topic_id, :].reshape(-1, 1)
+            # [1, n_vocs] x [n_docs, 1]
+
+        # self.pZDW: [nTopic, nDoc, nVoca]
+        for word_id in range(self.nVocabulary):
+            for doc_id in range(self.nDocuments):
+                sum_dw = self.pZDW[:, doc_id, word_id].sum()
+                for topic_id in range(self.nTopics):
+                    self.pZDW[topic_id, doc_id, word_id] /= sum_dw
+
+        # a = self.pZD.reshape(self.nTopics, self.nDocuments, 1)  # [n_topics, n_docs, 1]
+        # b = self.pWZ.T.reshape(self.nTopics, 1, self.nVocabulary)  # [n_topics, 1, n_vocs]
+        # self.pZDW = a * b
+        # self.pZDW /= self.pZDW.sum(axis=0).reshape(1, self.nDocuments, self.nVocabulary)
+
 
     def compute_log_likelihood_slowest(self):
+        # slow computation of logo likelihood
+        log_likelihood = 0.
+        for doc_id in range(self.nDocuments):
+            for word_id in range(self.nVocabulary):
+                tmp = self.dw_matrix[doc_id, word_id] * np.log(1./self.nDocuments * (self.pZD[:, doc_id] * self.pWZ[word_id, :]).sum())
+                log_likelihood += tmp
         return log_likelihood
     
-
     def compute_log_likelihood_fast(self):
+        # faster computation of log likelihood
+        log_likelihood = 0.
+        for doc_id in range(self.nDocuments):
+            tmp = self.dw_matrix[doc_id, :] * np.log(1./self.nDocuments * (self.pZD[:, doc_id].reshape(1, -1) * self.pWZ[:, :]).sum(axis=1))
+            log_likelihood += tmp.sum()
         return log_likelihood
-
 
     def solve(self, nTopics=10, max_iter=5, epsilon=1e-6):
 
@@ -106,7 +159,35 @@ class pLSI_dense:
         return self.pZD.T
 
 def gen_document_word_frequency(input_path):
+    item_ids = pickle.load(open(input_path + '/item_ids.pkl', 'rb'))
+
+    file = open("ml_plot.dat", encoding="utf-8").readlines()
+    document_mapping = dict()
+    d_id = 0
+
+    word_mapping = dict()
+    w_id = 0
+
+    for row in file:
+        index = row.find("::")
+        if row[:index] in item_ids:
+            document_mapping[int(row[:index])] = d_id
+            d_id += 1
+            for word in row[index + 2:-2].replace("|", " ").split():
+                if word not in word_mapping:
+                    word_mapping[word] = w_id
+                    w_id += 1
+    
+    dw_matrix = np.zeros((d_id, w_id))
+    d_iter = 0
+    for row in file:
+        index = row.find("::")
+        if row[:index] in item_ids:
+            for word in row[index + 2:-2].replace("|", " ").split():
+                dw_matrix[d_iter][word_mapping[word]] += 1
+            d_iter += 1
     return dw_matrix
+
 
 def train_dense_pLSI(input_path, nTopics):
     dw_matrix = gen_document_word_frequency(input_path)
