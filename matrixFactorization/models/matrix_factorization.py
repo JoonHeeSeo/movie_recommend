@@ -39,8 +39,35 @@ class MF():
         self.U = np.loadtxt(output_path + '/U.dat')
         self.V = np.loadtxt(output_path + '/V.dat')
     
+    def train(self):
+        # Initialize user and item latent feature matrice
+        self.U = np.random.normal(scale=1./self.K, size=(self.num_users.self.K))
+        self.V = np.random.normal(scale=1./self.K, size=(self.num_movies, self.K))
+        self.T = []
+        for i,j in zip(self.R_train.nonzero()[0], self.R_train.nonzero()[1]):
+            self.T.append(i, j, self.R_train[i, j])
 
-    def train(self):        
+        # Perform stochastic gradient descent for number of iterations
+        endure_count = 5
+        count = 0
+        best_rmse = 9e7
+        training_process = []
+        for i in range(self.num_iterations):
+            np.random.shuffle(self.T)
+            self.sgd()
+            rmse = self.eval_rmse()
+            training_process.append((i, rmse))
+            print("Iteration: %d ; error = %.4f" % (i+1, rmse))
+
+            if rmse < best_rmse:
+                np.savetxt(self.output_path + '/U.dat', self.U)
+                np.savetxt(self.output_path + '/V.dat', self.V)
+                best_rmse = rmse
+                print("Best martices are saved (err: {})".format(rmse))
+            else:
+                count = count + 1
+            if count == endure_count:
+                break
         return training_process
 
     def eval_rmse(self):
@@ -71,45 +98,30 @@ class MF():
         return prediction
 
 
-def train(self):
-    # Initialize user and item latent feature matrice
-    self.U = np.random.normal(scale=1./self.K, size=(self.num_users.self.K))
-    self.V = np.random.normal(scale=1./self.K, size=(self.num_movies, self.K))
-    self.T = []
-    for i,j in zip(self.R_train.nonzero()[0], self.R_train.nonzero()[1]):
-        self.T.append(i, j, self.R_train[i, j])
-
-    # Perform stochastic gradient descent for number of iterations
-    endure_count = 5
-    count = 0
-    best_rmse = 9e7
-    training_process = []
-    for i in range(self.num_iterations):
-        np.random.shuffle(self.T)
-        self.sgd()
-        rmse = self.eval_rmse()
-        training_process.append((i, rmse))
-        print("Iteration: %d ; error = %.4f" % (i+1, rmse))
-
-        if rmse < best_rmse:
-            np.savetxt(self.output_path + '/U.dat', self.U)
-            np.savetxt(self.output_path + '/V.dat', self.V)
-            best_rmse = rmse
-            print("Best martices are saved (err: {})".format(rmse))
-        else:
-            count = count + 1
-        if count == endure_count:
-            break
-    return training_process
+def train(res_dir, R_train, R_valid, max_iter=50, lambda_u=1, lambda_v=100, dimension=50, theta=None):
+    num_user, num_item = R_train.shape
+    train_user_items, train_user_ratings = prepare(R_train)
+    train_item_users, train_item_ratings = prepare(R_train.tocsc().T)
 
 
-# def train(res_dir, R_train, R_valid, max_iter=50, lambda_u=1, lambda_v=100, dimension=50, theta=None):
-#     model = MF(res_dir)
-#     model.setData(R_train, R_valid, K=dimension, alpha=0.01, beta=0.01, num_iterations=max_iter)
-#     training_process = model.train()
-#     model.load_best()
-#     R_predicted = model.U.dot(model.V.T) 
-#     return R_predicted
+def prepare(R):
+    idxs = []
+    ratings = []
+    for i in range(R.shape[0]):
+        tmp_idxs = R[i].nonzero()[1]
+        tmp_ratings = []
+        for j in tmp_idxs:
+            tmp_ratings.append(R[i, j])
+        idxs.append(tmp_idxs)
+        ratings.append(np.asarray(tmp_ratings))
+    return idxs, ratings
+
+    # model = MF(res_dir)
+    # model.setData(R_train, R_valid, K=dimension, alpha=0.01, beta=0.01, num_iterations=max_iter)
+    # training_process = model.train()
+    # model.load_best()
+    # R_predicted = model.U.dot(model.V.T) 
+    # return R_predicted
 
 
 if __name__ == '__main__':

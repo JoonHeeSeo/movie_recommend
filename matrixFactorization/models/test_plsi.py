@@ -13,14 +13,15 @@ class pLSI_dense:
         self.verbose = verbose
         pass
 
-    def setData(self, dw_matrix):
+    def setData(self, sparse_data, non_zero_idxs, shape):
         # dw_matrix is required to be given in a two dimensional numpy array (nDocuments,nVocabulary)
         # with each element representing the number of times observed
 
         # set parameters
-        self.dw_matrix = dw_matrix
-        self.nDocuments = dw_matrix.shape[0]
-        self.nVocabulary = dw_matrix.shape[1]
+        self.data = sparse_data
+        self.non_zero_idxs = non_zero_idxs
+        self.nDocuments = shape[0]
+        self.nVocabulary = shape[1]
     
     def compute_observed(self):
         # self.pZDW : [n_topics, n_docs, n_vocs]
@@ -186,7 +187,19 @@ def gen_document_word_frequency(input_path):
             for word in row[index + 2:-2].replace("|", " ").split():
                 dw_matrix[d_iter][word_mapping[word]] += 1
             d_iter += 1
-    return dw_matrix
+
+    # Sparsification of data
+    sparse_data, non_zero_idxs = [], []
+    counts = 0
+    for document_id in range(dw_matrix.shape[0]):
+        non_zero_idx = dw_matrix[document_id, :].nonzero()
+        t = dw_matrix[document_id, non_zero_idx]
+        counts += t.shape[1]
+
+        sparse_data.append(t[0])
+        non_zero_idxs.append(non_zero_idx[0])
+
+    return sparse_data, non_zero_idxs
 
 
 def train_dense_pLSI(input_path, nTopics):
