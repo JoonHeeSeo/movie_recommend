@@ -66,7 +66,8 @@ if __name__ == '__main__':
         if alg == 2:
             # PLSI
             print("\n\t start training PLSI")
-            theta = plsi.train(input_path, d, False)
+            # theta = plsi.train(input_path, d, False)
+            theta = plsi.train_dense_pLSI(input_path, d)  # Add this line
             pass
         # Matrix Factorization
         print()

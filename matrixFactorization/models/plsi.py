@@ -163,7 +163,7 @@ class pLSI_dense:
 def gen_document_word_frequency(input_path):
     item_ids = pickle.load(open(input_path + '/item_ids.pkl', 'rb'))
 
-    file = open("../ml_plot.dat", encoding="utf-8").readlines()
+    file = open("ml_plot.dat", encoding="utf-8").readlines()
     document_mapping = dict()
     d_id = 0
 
