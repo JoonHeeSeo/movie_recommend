@@ -41,11 +41,11 @@ class MF():
     
     def train(self):
         # Initialize user and item latent feature matrice
-        self.U = np.random.normal(scale=1./self.K, size=(self.num_users.self.K))
+        self.U = np.random.normal(scale=1./self.K, size=(self.num_users, self.K))
         self.V = np.random.normal(scale=1./self.K, size=(self.num_movies, self.K))
         self.T = []
         for i,j in zip(self.R_train.nonzero()[0], self.R_train.nonzero()[1]):
-            self.T.append(i, j, self.R_train[i, j])
+            self.T.append((i, j, self.R_train[i, j]))
 
         # Perform stochastic gradient descent for number of iterations
         endure_count = 5
@@ -71,14 +71,15 @@ class MF():
         return training_process
 
     def eval_rmse(self):
-        xs, xy = self.R_valid.nonzero()
+        xs, ys = self.R_valid.nonzero()
         predicted = self.U.dot(self.V.T)
         error = 0
         count = 0
         for x, y in zip(xs, ys):
             error += pow(self.R_valid[x, y] - predicted[x, y], 2)
             count = count + 1
-        return np.sqrt(error)/count
+        return np.sqrt(error) / count
+
 
     def sgd(self):
         for i, j, r in self.T:
@@ -95,13 +96,22 @@ class MF():
 
     
     def get_rating(self, i, j):
-        return prediction
+        return self.U[i, :].dot(self.V[j, :].T)
+
 
 
 def train(res_dir, R_train, R_valid, max_iter=50, lambda_u=1, lambda_v=100, dimension=50, theta=None):
     num_user, num_item = R_train.shape
     train_user_items, train_user_ratings = prepare(R_train)
     train_item_users, train_item_ratings = prepare(R_train.tocsc().T)
+
+    model = MF(res_dir)  # 모델 초기화 (MF 클래스는 어디선가 import 되어야 함)
+    model.setData(R_train, R_valid, K=dimension, alpha=0.01, beta=0.01, num_iterations=max_iter)
+    training_process = model.train()
+    model.load_best()
+    R_predicted = model.U.dot(model.V.T)  # 학습된 모델을 사용하여 예측 결과 계산
+
+    return R_predicted
 
 
 def prepare(R):
@@ -115,13 +125,6 @@ def prepare(R):
         idxs.append(tmp_idxs)
         ratings.append(np.asarray(tmp_ratings))
     return idxs, ratings
-
-    # model = MF(res_dir)
-    # model.setData(R_train, R_valid, K=dimension, alpha=0.01, beta=0.01, num_iterations=max_iter)
-    # training_process = model.train()
-    # model.load_best()
-    # R_predicted = model.U.dot(model.V.T) 
-    # return R_predicted
 
 
 if __name__ == '__main__':
